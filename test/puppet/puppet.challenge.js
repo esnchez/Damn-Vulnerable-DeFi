@@ -103,8 +103,9 @@ describe('[Challenge] Puppet', function () {
 
     it('Exploit', async function () {
        //The lending pool is computing the eth needed as collateral to borrow tokens from it, to any user that might request them,
-       //using the Uniswap exchange contract for the pair (DVT tokens/ Eth). Main observation here is that this exchange has a ratio 1:1 
-       // on both tokens and eth, and us as an attacker , we are in possession of bigger amounts of both. 
+       //using the Uniswap exchange contract for the pair (DVT tokens/ Eth) as a price oracle. 
+       // Main observation here is that this exchange has a ratio 1:1 on both tokens and eth, 
+       //and us as an attacker , we are in possession of bigger amounts of both. 
        //We can use this advantage to move the exchange in our favor. Firstly, by selling our tokens in the exchange for eth,
        //increading the amount of tokens but devaluating a lot its price per unit. 
        //Afterwards, we can request the pool to borrow tokens and the calculation of the Eth needed will favor us, 
